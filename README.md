@@ -1,28 +1,13 @@
 # GOWT
 Sample crud web application project using Golang(http, templates, os, sql), Bootstrap 4, DataTables, MySQL, Docker.
 
-## Getting Started
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
-
 ### Prerequisites
-
-What things you need to install the software
 
 * Golang, preferably the latest version (1.16).
 * MySQL Database
 * Docker (optional)
 
-### Installing
-
-1. Clone this repository
-
-```
-git clone https://github.com/le4ndro/gowt.git
-cd gowt
-```
-
-2. Run below command and install dependencies
+Run below command and install dependencies
 
 ```
 go mod download
@@ -74,7 +59,6 @@ make build
 
 ```
 ./out/bin/gowt
-\out\bin\main.exe (Windows)
 ```
 ## Create Docker image
 
@@ -95,24 +79,6 @@ make docker-release
 ```
 make docker-run
 ```
-
-
-## Built With
-
-* [Golang](https://golang.org/doc/) - The programming language 
-* [Bootstrap 4](https://getbootstrap.com/docs/4.2/getting-started/introduction/) - Html framework
-* [jQuery](https://api.jquery.com/) - Javascript library
-* [DataTables](https://datatables.net/manual/) - Advanced tables - Plug-in for jQuery
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags).
-
-## Authors
-
-* **Leandro Souza** - *Initial work*
-
-## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
