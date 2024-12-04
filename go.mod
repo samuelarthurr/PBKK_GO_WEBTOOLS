@@ -1,4 +1,4 @@
-module github.com/le4ndro/gowt
+module github.com/samuelarthurr/PBKK_GO_WEBTOOLS
 
 go 1.16
 
