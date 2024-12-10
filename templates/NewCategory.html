@@ -1,0 +1,16 @@
+{{ define "NewCategory" }} {{ template "Header" }}
+<div class="container col-5">
+  <h2>New Category</h2>
+  <form method="POST" action="/categories/insert">
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" name="name" class="form-control" required />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea name="description" class="form-control" rows="3"></textarea>
+    </div>
+    <input type="submit" value="Save Category" class="btn btn-primary" />
+  </form>
+</div>
+{{ template "Footer" }} {{ end }}

@@ -1,0 +1,35 @@
+{{ define "Categories" }} {{ template "Header" }}
+<div class="container">
+  <h2>Categories</h2>
+  <p>
+    <a href="/categories/new" class="btn btn-primary">New Category</a>
+  </p>
+  <table id="tabledata" class="display" style="width: 100%">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Description</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ range . }}
+      <tr>
+        <td>{{ .Id }}</td>
+        <td>{{ .Name }}</td>
+        <td>{{ .Description }}</td>
+        <td>
+          <a href="/categories/edit?id={{ .Id }}" class="btn btn-primary"
+            >Edit</a
+          >
+          <a href="/categories/delete?id={{ .Id }}" class="btn btn-danger"
+            >Delete</a
+          >
+        </td>
+      </tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ template "Footer" }} {{ end }}

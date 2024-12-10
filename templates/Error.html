@@ -1,0 +1,12 @@
+{{ define "Error" }} {{ template "Header" }}
+<div class="container">
+  <div class="alert alert-danger" role="alert">
+    <h4 class="alert-heading">Error</h4>
+    <p>{{ .error }}</p>
+    <hr />
+    <p class="mb-0">
+      <a href="/" class="btn btn-primary">Back to Home</a>
+    </p>
+  </div>
+</div>
+{{ template "Footer" }} {{ end }}

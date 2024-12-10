@@ -2,205 +2,455 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"text/template"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 )
 
+// Category struct
+type Category struct {
+    Id          int    `json:"id"`
+    Name        string `json:"name"`
+    Description string `json:"description"`
+}
+
 // Tool struct
 type Tool struct {
-	Id       int
-	Name     string
-	Category string
-	URL      string
-	Rating   int
-	Notes    string
+    Id         int      `json:"id"`
+    Name       string   `json:"name"`
+    CategoryId int      `json:"category_id"`
+    Category   Category `json:"category"`
+    URL        string   `json:"url"`
+    Rating     int      `json:"rating"`
+    Notes      string   `json:"notes"`
 }
 
 func dbConn() (db *sql.DB) {
-	dbDriver := "mysql"
-	dbUser := os.Getenv("DATABASE_USERNAME")
-	dbPass := os.Getenv("DATABASE_PASSWORD")
-	dbName := os.Getenv("DATABASE_NAME")
-	dbServer := os.Getenv("DATABASE_SERVER")
-	dbPort := os.Getenv("DATABASE_PORT")
-	log.Println("Database host: " + dbServer)
-	log.Println("Database port: " + dbPort)
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@tcp("+dbServer+":"+dbPort+")/"+dbName)
-	if err != nil {
-		panic(err.Error())
-	}
-	return db
+    dbDriver := "mysql"
+    dbUser := os.Getenv("DATABASE_USERNAME")
+    dbPass := os.Getenv("DATABASE_PASSWORD")
+    dbName := os.Getenv("DATABASE_NAME")
+    dbServer := os.Getenv("DATABASE_SERVER")
+    dbPort := os.Getenv("DATABASE_PORT")
+
+    log.Printf("Attempting database connection to %s:%s", dbServer, dbPort)
+
+    connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+        dbUser, dbPass, dbServer, dbPort, dbName)
+    
+    var err error
+    db, err = sql.Open(dbDriver, connectionString)
+    if err != nil {
+        log.Printf("Error opening database: %v", err)
+        return nil
+    }
+
+    // Test the connection
+    err = db.Ping()
+    if err != nil {
+        log.Printf("Error pinging database: %v", err)
+        return nil
+    }
+
+    log.Println("Successfully connected to database")
+    return db
 }
 
-var tmpl = template.Must(template.ParseGlob("templates/*"))
-
-//Index handler
-func Index(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	selDB, err := db.Query("SELECT * FROM tools ORDER BY id DESC")
-	if err != nil {
-		panic(err.Error())
-	}
-
-	tool := Tool{}
-	res := []Tool{}
-
-	for selDB.Next() {
-		var id, rating int
-		var name, category, url, notes string
-		err := selDB.Scan(&id, &name, &category, &url, &rating, &notes)
-		if err != nil {
-			panic(err.Error())
-		}
-		log.Println("Listing Row: Id " + string(id) + " | name " + name + " | category " + category + " | url " + url + " | rating " + string(rating) + " | notes " + notes)
-
-		tool.Id = id
-		tool.Name = name
-		tool.Category = category
-		tool.URL = url
-		tool.Rating = rating
-		tool.Notes = notes
-		res = append(res, tool)
-	}
-	tmpl.ExecuteTemplate(w, "Index", res)
-	defer db.Close()
+func setupRouter() *gin.Engine {
+    r := gin.Default()
+    
+    // Load templates
+    r.LoadHTMLGlob("templates/*")
+    
+    // Tool routes
+    r.GET("/", indexHandler)
+    r.GET("/show", showHandler)
+    r.GET("/new", newHandler)
+    r.GET("/edit", editHandler)
+    r.POST("/insert", insertHandler)
+    r.POST("/update", updateHandler)
+    r.GET("/delete", deleteHandler)
+    
+    // Category routes
+    r.GET("/categories", categoriesHandler)
+    r.GET("/categories/new", newCategoryHandler)
+    r.POST("/categories/insert", insertCategoryHandler)
+    r.GET("/categories/edit", editCategoryHandler)
+    r.POST("/categories/update", updateCategoryHandler)
+    r.GET("/categories/delete", deleteCategoryHandler)
+    
+    return r
 }
 
-//Show handler
-func Show(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	nId := r.URL.Query().Get("id")
-	selDB, err := db.Query("SELECT * FROM tools WHERE id=?", nId)
-	if err != nil {
-		panic(err.Error())
-	}
+// Tool Handlers
+func indexHandler(c *gin.Context) {
+    db := dbConn()
+    if db == nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{
+            "error": "Unable to connect to database",
+        })
+        return
+    }
+    defer db.Close()
 
-	tool := Tool{}
+    // Updated query to join with categories
+    rows, err := db.Query(`
+        SELECT t.id, t.name, t.category_id, c.name, t.url, t.rating, t.notes, c.description 
+        FROM tools t 
+        JOIN categories c ON t.category_id = c.id 
+        ORDER BY t.id DESC
+    `)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{
+            "error": "Error fetching tools: " + err.Error(),
+        })
+        return
+    }
+    defer rows.Close()
 
-	for selDB.Next() {
-		var id, rating int
-		var name, category, url, notes string
-		err := selDB.Scan(&id, &name, &category, &url, &rating, &notes)
-		if err != nil {
-			panic(err.Error())
-		}
+    var tools []Tool
+    for rows.Next() {
+        var tool Tool
+        err := rows.Scan(
+            &tool.Id, 
+            &tool.Name, 
+            &tool.CategoryId,
+            &tool.Category.Name,
+            &tool.URL, 
+            &tool.Rating, 
+            &tool.Notes,
+            &tool.Category.Description,
+        )
+        if err != nil {
+            log.Printf("Error scanning row: %v", err)
+            continue
+        }
+        tools = append(tools, tool)
+    }
 
-		log.Println("Showing Row: Id " + string(id) + " | name " + name + " | category " + category + " | url " + url + " | rating " + string(rating) + " | notes " + notes)
+    if err = rows.Err(); err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{
+            "error": "Error processing results: " + err.Error(),
+        })
+        return
+    }
 
-		tool.Id = id
-		tool.Name = name
-		tool.Category = category
-		tool.URL = url
-		tool.Rating = rating
-		tool.Notes = notes
-	}
-	tmpl.ExecuteTemplate(w, "Show", tool)
-	defer db.Close()
+    c.HTML(http.StatusOK, "Index", gin.H{
+        "tools": tools,
+    })
 }
 
-func New(w http.ResponseWriter, r *http.Request) {
-	tmpl.ExecuteTemplate(w, "New", nil)
+func newHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    // Get categories for dropdown
+    rows, err := db.Query("SELECT id, name FROM categories ORDER BY name")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    var categories []Category
+    for rows.Next() {
+        var category Category
+        err := rows.Scan(&category.Id, &category.Name)
+        if err != nil {
+            continue
+        }
+        categories = append(categories, category)
+    }
+
+    c.HTML(http.StatusOK, "New", gin.H{"Categories": categories})
 }
 
-func Edit(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	nId := r.URL.Query().Get("id")
-	selDB, err := db.Query("SELECT * FROM tools WHERE id=?", nId)
-	if err != nil {
-		panic(err.Error())
-	}
+func insertHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
 
-	tool := Tool{}
+    name := c.PostForm("name")
+    categoryId := c.PostForm("category_id")
+    url := c.PostForm("url")
+    rating := c.PostForm("rating")
+    notes := c.PostForm("notes")
 
-	for selDB.Next() {
-		var id, rating int
-		var name, category, url, notes string
-		err := selDB.Scan(&id, &name, &category, &url, &rating, &notes)
-		if err != nil {
-			panic(err.Error())
-		}
+    stmt, err := db.Prepare("INSERT INTO tools (name, category_id, url, rating, notes) VALUES (?, ?, ?, ?, ?)")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
 
-		tool.Id = id
-		tool.Name = name
-		tool.Category = category
-		tool.URL = url
-		tool.Rating = rating
-		tool.Notes = notes
-	}
+    _, err = stmt.Exec(name, categoryId, url, rating, notes)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
 
-	tmpl.ExecuteTemplate(w, "Edit", tool)
-	defer db.Close()
+    c.Redirect(http.StatusMovedPermanently, "/")
 }
 
-func Insert(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	if r.Method == "POST" {
-		name := r.FormValue("name")
-		category := r.FormValue("category")
-		url := r.FormValue("url")
-		rating := r.FormValue("rating")
-		notes := r.FormValue("notes")
-		insForm, err := db.Prepare("INSERT INTO tools (name, category, url, rating, notes) VALUES (?, ?, ?, ?, ?)")
-		if err != nil {
-			panic(err.Error())
-		}
-		insForm.Exec(name, category, url, rating, notes)
-		log.Println("Insert Data: name " + name + " | category " + category + " | url " + url + " | rating " + rating + " | notes " + notes)
-	}
-	defer db.Close()
-	http.Redirect(w, r, "/", 301)
+func editHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    nId := c.Query("id")
+    row := db.QueryRow(`
+        SELECT t.id, t.name, t.category_id, t.url, t.rating, t.notes 
+        FROM tools t 
+        WHERE t.id = ?
+    `, nId)
+
+    var tool Tool
+    err := row.Scan(&tool.Id, &tool.Name, &tool.CategoryId, &tool.URL, &tool.Rating, &tool.Notes)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    // Get categories for dropdown
+    rows, err := db.Query("SELECT id, name FROM categories ORDER BY name")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    var categories []Category
+    for rows.Next() {
+        var category Category
+        err := rows.Scan(&category.Id, &category.Name)
+        if err != nil {
+            continue
+        }
+        categories = append(categories, category)
+    }
+
+    c.HTML(http.StatusOK, "Edit", gin.H{
+        "Tool":       tool,
+        "Categories": categories,
+    })
 }
 
-func Update(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	if r.Method == "POST" {
-		name := r.FormValue("name")
-		category := r.FormValue("category")
-		url := r.FormValue("url")
-		rating := r.FormValue("rating")
-		notes := r.FormValue("notes")
-		id := r.FormValue("uid")
-		insForm, err := db.Prepare("UPDATE tools SET name=?, category=?, url=?, rating=?, notes=? WHERE id=?")
-		if err != nil {
-			panic(err.Error())
-		}
-		insForm.Exec(name, category, url, rating, notes, id)
-		log.Println("UPDATE Data: name " + name + " | category " + category + " | url " + url + " | rating " + rating + " | notes " + notes)
-	}
-	defer db.Close()
-	http.Redirect(w, r, "/", 301)
+func updateHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    id := c.PostForm("uid")
+    name := c.PostForm("name")
+    categoryId := c.PostForm("category_id")
+    url := c.PostForm("url")
+    rating := c.PostForm("rating")
+    notes := c.PostForm("notes")
+
+    stmt, err := db.Prepare("UPDATE tools SET name=?, category_id=?, url=?, rating=?, notes=? WHERE id=?")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    _, err = stmt.Exec(name, categoryId, url, rating, notes, id)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Redirect(http.StatusMovedPermanently, "/")
 }
 
-func Delete(w http.ResponseWriter, r *http.Request) {
-	db := dbConn()
-	tool := r.URL.Query().Get("id")
-	delForm, err := db.Prepare("DELETE FROM tools WHERE id=?")
-	if err != nil {
-		panic(err.Error())
-	}
-	delForm.Exec(tool)
-	log.Println("DELETE " + tool)
-	defer db.Close()
-	http.Redirect(w, r, "/", 301)
+// Category Handlers
+func categoriesHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    rows, err := db.Query("SELECT id, name, description FROM categories ORDER BY name")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    var categories []Category
+    for rows.Next() {
+        var category Category
+        err := rows.Scan(&category.Id, &category.Name, &category.Description)
+        if err != nil {
+            log.Printf("Error scanning row: %v", err)
+            continue
+        }
+        categories = append(categories, category)
+    }
+
+    c.HTML(http.StatusOK, "Categories", categories)
+}
+
+func newCategoryHandler(c *gin.Context) {
+    c.HTML(http.StatusOK, "NewCategory", nil)
+}
+
+func insertCategoryHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    name := c.PostForm("name")
+    description := c.PostForm("description")
+
+    stmt, err := db.Prepare("INSERT INTO categories (name, description) VALUES (?, ?)")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    _, err = stmt.Exec(name, description)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Redirect(http.StatusMovedPermanently, "/categories")
+}
+
+func editCategoryHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    nId := c.Query("id")
+    row := db.QueryRow("SELECT id, name, description FROM categories WHERE id = ?", nId)
+
+    var category Category
+    err := row.Scan(&category.Id, &category.Name, &category.Description)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.HTML(http.StatusOK, "EditCategory", category)
+}
+
+func updateCategoryHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    id := c.PostForm("id")
+    name := c.PostForm("name")
+    description := c.PostForm("description")
+
+    stmt, err := db.Prepare("UPDATE categories SET name=?, description=? WHERE id=?")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    _, err = stmt.Exec(name, description, id)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Redirect(http.StatusMovedPermanently, "/categories")
+}
+
+// Add these functions to your main.go file
+
+func showHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    nId := c.Query("id")
+    row := db.QueryRow(`
+        SELECT t.id, t.name, t.category_id, c.name as category_name, t.url, t.rating, t.notes 
+        FROM tools t 
+        JOIN categories c ON t.category_id = c.id 
+        WHERE t.id = ?
+    `, nId)
+
+    var tool Tool
+    var categoryName string
+    err := row.Scan(
+        &tool.Id, 
+        &tool.Name, 
+        &tool.CategoryId,
+        &categoryName,
+        &tool.URL, 
+        &tool.Rating, 
+        &tool.Notes,
+    )
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    tool.Category.Name = categoryName
+    c.HTML(http.StatusOK, "Show", tool)
+}
+
+func deleteHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    nId := c.Query("id")
+    stmt, err := db.Prepare("DELETE FROM tools WHERE id=?")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    _, err = stmt.Exec(nId)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Redirect(http.StatusMovedPermanently, "/")
+}
+
+func deleteCategoryHandler(c *gin.Context) {
+    db := dbConn()
+    defer db.Close()
+
+    id := c.Query("id")
+    
+    // First check if category is in use
+    var count int
+    err := db.QueryRow("SELECT COUNT(*) FROM tools WHERE category_id = ?", id).Scan(&count)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+    
+    if count > 0 {
+        c.HTML(http.StatusBadRequest, "Error", gin.H{
+            "error": "Cannot delete category that is in use by tools",
+        })
+        return
+    }
+
+    stmt, err := db.Prepare("DELETE FROM categories WHERE id=?")
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    _, err = stmt.Exec(id)
+    if err != nil {
+        c.HTML(http.StatusInternalServerError, "Error", gin.H{"error": err.Error()})
+        return
+    }
+
+    c.Redirect(http.StatusMovedPermanently, "/categories")
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	log.Println("Server started on: http://localhost:8080")
-	http.HandleFunc("/", Index)
-	http.HandleFunc("/show", Show)
-	http.HandleFunc("/new", New)
-	http.HandleFunc("/edit", Edit)
-	http.HandleFunc("/insert", Insert)
-	http.HandleFunc("/update", Update)
-	http.HandleFunc("/delete", Delete)
-	http.ListenAndServe(":8080", nil)
+    err := godotenv.Load()
+    if err != nil {
+        log.Fatal("Error loading .env file")
+    }
+
+    gin.SetMode(gin.DebugMode)
+    router := setupRouter()
+    
+    log.Println("Server started on: http://localhost:8080")
+    router.Run(":8080")
 }

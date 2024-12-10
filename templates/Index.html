@@ -4,6 +4,7 @@
 
   <p>
     <a href="/new" class="btn btn-primary">New Tool</a>
+    <a href="/categories" class="btn btn-secondary">Manage Categories</a>
   </p>
   <table id="tabledata" class="display" style="width: 100%">
     <thead>
@@ -13,26 +14,16 @@
         <th>Category</th>
         <th>URL</th>
         <th>Rating</th>
-        <th></th>
+        <th>Actions</th>
       </tr>
     </thead>
-    <tfoot>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Category</th>
-        <th>URL</th>
-        <th>Rating</th>
-        <th></th>
-      </tr>
-    </tfoot>
     <tbody>
-      {{ range . }}
+      {{ range .tools }}
       <tr>
         <td>{{ .Id }}</td>
         <td>{{ .Name }}</td>
-        <td>{{ .Category }}</td>
-        <td><a href="{{ .URL }}" target="_blank"> {{ .URL }} </a></td>
+        <td>{{ .Category.Name }}</td>
+        <td><a href="{{ .URL }}" target="_blank">{{ .URL }}</a></td>
         <td>{{ .Rating }}</td>
         <td>
           <a href="/show?id={{ .Id }}" class="btn btn-primary">View</a>
