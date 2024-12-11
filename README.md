@@ -239,22 +239,3 @@ make build
 ```
 ./out/bin/gowt
 ```
-## Create Docker image
-
-1. To build and tag your image locally
-
-```
-make docker-build
-```
-
-2. To push your image to registry
-
-```
-make docker-release
-```
-
-## Run Docker image locally
-
-```
-make docker-run
-```
