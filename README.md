@@ -233,3 +233,7 @@ make build
 ## Conclusion
 
 This Go program is a robust web application built with the Gin framework, facilitating the management of tools and their categories through a MySQL database. It encompasses essential CRUD (Create, Read, Update, Delete) operations for both tools and categories, ensuring data integrity and user-friendly interactions via HTML templates.
+
+## Video Explanation and Demonstration Link:
+
+https://youtu.be/yHya9VqJeYQ
