@@ -155,9 +155,6 @@ GET    /categories/delete       # Delete category
 4. Push to the branch
 5. Create a new Pull Request
 
-## License
-[Your License]
-
 # GOWT
 Sample crud web application project using Golang(http, templates, os, sql), Bootstrap 4, DataTables, MySQL, Docker.
 
